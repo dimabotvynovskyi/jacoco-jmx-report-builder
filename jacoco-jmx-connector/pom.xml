@@ -9,7 +9,7 @@
 	</parent>
 	<modelVersion>4.0.0</modelVersion>
 
-	<artifactId>jacoco-jmx-client</artifactId>
+	<artifactId>jacoco-jmx-connector</artifactId>
 
 	<properties>
 		<source.version>1.8</source.version>

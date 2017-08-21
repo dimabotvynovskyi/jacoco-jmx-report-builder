@@ -7,24 +7,30 @@ import java.io.IOException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Collection;
-import java.util.HashSet;
+import java.util.LinkedList;
+import java.util.List;
 import java.util.Properties;
-import java.util.Set;
 import java.util.stream.Collectors;
 
-import org.jacoco.core.data.ExecutionData;
+import org.jacoco.core.analysis.Analyzer;
+import org.jacoco.core.analysis.CoverageBuilder;
+import org.jacoco.core.analysis.IBundleCoverage;
+import org.jacoco.core.analysis.IPackageCoverage;
+import org.jacoco.core.analysis.ISourceFileCoverage;
 import org.jacoco.core.data.ExecutionDataReader;
 import org.jacoco.core.data.ExecutionDataStore;
 import org.jacoco.core.data.SessionInfoStore;
 
 public class TestSuiteCoverageProcessor {
 
+	private final TiaReportBuilderConfiguration configuration;
 	private final JaCoCoMBeanClient jaCoCoMBeanClient;
 	private Instant startTime;
 	private String currentTestSuiteName;
 
-	public TestSuiteCoverageProcessor() {
-		jaCoCoMBeanClient = new JaCoCoMBeanClient();
+	public TestSuiteCoverageProcessor(final TiaReportBuilderConfiguration configuration) {
+		this.configuration = configuration;
+		jaCoCoMBeanClient = new JaCoCoMBeanClient(configuration);
 	}
 
 	public void beforeTestSuite(String testSuiteName) {
@@ -34,32 +40,38 @@ public class TestSuiteCoverageProcessor {
 	}
 
 	public void afterTestSuite(String testSuiteName) throws IOException {
+		Duration timeElapsed = Duration.between(startTime, Instant.now());
+		
 		if (!currentTestSuiteName.equals(testSuiteName)) {
 			throw new IllegalStateException("Wrong test suite processing order, coverage data is corrupted");
 		}
-
-		Duration timeElapsed = Duration.between(startTime, Instant.now());
-		System.out.println("elapsed time ( milliseconds ):..." + timeElapsed.toMillis());
 
 		byte[] executionData = jaCoCoMBeanClient.getExecutionData();
 		Collection<String> affectedClasses = getAffectedClasses(toExecutionDataStore(executionData));
 
 		Properties props = new Properties();
 		props.setProperty(testSuiteName, affectedClasses.stream().collect(Collectors.joining(",")));
-		//TODO smarter file name
+		props.setProperty("time.elapsed.milliseconds", "" + timeElapsed.toMillis());
 
-		new File("/tmp/jacoco/test/" + testSuiteName).createNewFile();
+		File targetPath = new File(System.getProperty("user.dir"), "target");
+		File reportFolder = new File(targetPath, configuration.getReportsFolderName());
+		reportFolder.mkdir();
 
-		props.store(new FileOutputStream("/tmp/jacoco/test/" + testSuiteName), null);
+		File reportFile = new File(reportFolder, testSuiteName);
+		reportFile.createNewFile();
+
+		props.store(new FileOutputStream(reportFile), null);
 
 		appendFinalReport(executionData);
 	}
 
 	private void appendFinalReport(byte[] executionData) throws IOException {
 		// TODO check if file exists or/not
-		new File("/tmp/jacoco/test/final_jacoco_report.exec").createNewFile();
+		File targetPath = new File(System.getProperty("user.dir"), "target");
+		File finalReport = new File(targetPath, configuration.getFinalReportName());
+		finalReport.createNewFile();
 
-		try (FileOutputStream output = new FileOutputStream("/tmp/jacoco/test/final_jacoco_report.exec", true)) {
+		try (FileOutputStream output = new FileOutputStream(finalReport, true)) {
 			output.write(executionData);
 		}
 		// TODO process exception correctly
@@ -77,14 +89,23 @@ public class TestSuiteCoverageProcessor {
 		return executionDataStore;
 	}
 
-	private Collection<String> getAffectedClasses(ExecutionDataStore executionDataStore) {
-		Set<String> names = new HashSet<>(executionDataStore.getContents().size());
-		for (ExecutionData executionData : executionDataStore.getContents()) {
-			names.add(executionData.getName());
+	private Collection<String> getAffectedClasses(ExecutionDataStore executionDataStore) throws IOException {
+		final CoverageBuilder coverageBuilder = new CoverageBuilder();
+		final Analyzer analyzer = new Analyzer(executionDataStore, coverageBuilder);
+		analyzer.analyzeAll(new File(configuration.getClassesDirectory()));
+		IBundleCoverage bundle = coverageBuilder.getBundle("tia-jacoco-report");
+
+		List<String> affectedSourceFiles = new LinkedList<>();
+		for (IPackageCoverage iPackageCoverage : bundle.getPackages()) {
+			for (ISourceFileCoverage iSourceFileCoverage : iPackageCoverage.getSourceFiles()) {
+				affectedSourceFiles.add(iSourceFileCoverage.getPackageName() + "/" + iSourceFileCoverage.getName());
+			}
 		}
-		return names;
+
+		return affectedSourceFiles;
 	}
 
+	//TODO find a way to properly close connection
 	public void destroy() {
 		jaCoCoMBeanClient.close();
 	}

@@ -9,18 +9,18 @@
 	</parent>
 	<modelVersion>4.0.0</modelVersion>
 
-	<artifactId>jbehave-integration</artifactId>
+	<artifactId>jacoco-jbehave-integration</artifactId>
 
 	<dependencies>
 		<dependency>
 			<groupId>org.jbehave</groupId>
 			<artifactId>jbehave-core</artifactId>
-			<version>3.8</version>
+			<version>3.9.5</version>
 		</dependency>
 
 		<dependency>
 			<groupId>com.github.dimabotvynovskyi.jacoco</groupId>
-			<artifactId>jacoco-jmx-client</artifactId>
+			<artifactId>jacoco-jmx-connector</artifactId>
 			<version>1.0.0-SNAPSHOT</version>
 		</dependency>
 	</dependencies>

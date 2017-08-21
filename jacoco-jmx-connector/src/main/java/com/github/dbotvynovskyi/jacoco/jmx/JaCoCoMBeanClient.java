@@ -10,23 +10,19 @@ import javax.management.remote.JMXConnector;
 import javax.management.remote.JMXConnectorFactory;
 import javax.management.remote.JMXServiceURL;
 
-import org.jacoco.core.data.ExecutionData;
 import org.jacoco.core.data.ExecutionDataReader;
 import org.jacoco.core.data.ExecutionDataStore;
 import org.jacoco.core.data.SessionInfoStore;
 
 public class JaCoCoMBeanClient {
 
-	//TODO configurable url
-	private static final String SERVICE_URL = "service:jmx:rmi:///jndi/rmi://sqbo-ops-soa.docker:9999/jmxrmi";
-
 	private final JMXConnector jmxc;
 	private final IAgent agentProxy;
 
-	JaCoCoMBeanClient() {
+	JaCoCoMBeanClient(final TiaReportBuilderConfiguration configuration) {
 		try {
 			// Open connection to the coverage agent:
-			final JMXServiceURL url = new JMXServiceURL(SERVICE_URL);
+			final JMXServiceURL url = new JMXServiceURL(configuration.getJacocoAgentJmxUrl());
 			jmxc = JMXConnectorFactory.connect(url, null);
 			final MBeanServerConnection connection = jmxc.getMBeanServerConnection();
 
@@ -71,39 +67,6 @@ public class JaCoCoMBeanClient {
 		catch (IOException e) {
 			// ignored
 		}
-	}
-
-	public static void main(final String[] args) throws Exception {
-		// create client
-		JaCoCoMBeanClient jacocoMBeanClient = new JaCoCoMBeanClient();
-
-		// print report to console
-		jacocoMBeanClient.printReport();
-
-		// close
-		jacocoMBeanClient.close();
-	}
-
-	public void printReport() throws IOException {
-		ExecutionDataStore executionDataStore = getExecutionDataStore();
-
-		for (ExecutionData executionData : executionDataStore.getContents()) {
-			System.out.printf("%016x  %3d of %3d   %s%n",
-					executionData.getId(),
-					getHitCount(executionData.getProbes()),
-					executionData.getProbes().length,
-					executionData.getName());
-		}
-	}
-
-	private int getHitCount(final boolean[] data) {
-		int count = 0;
-		for (final boolean hit : data) {
-			if (hit) {
-				count++;
-			}
-		}
-		return count;
 	}
 
 }
