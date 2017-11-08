@@ -2,16 +2,15 @@ package com.github.dbotvynovskyi.jacoco.jmx;
 
 import java.io.ByteArrayInputStream;
 import java.io.File;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.Properties;
-import java.util.stream.Collectors;
 
+import org.ho.yaml.Yaml;
 import org.jacoco.core.analysis.Analyzer;
 import org.jacoco.core.analysis.CoverageBuilder;
 import org.jacoco.core.analysis.IBundleCoverage;
@@ -21,12 +20,18 @@ import org.jacoco.core.data.ExecutionDataReader;
 import org.jacoco.core.data.ExecutionDataStore;
 import org.jacoco.core.data.SessionInfoStore;
 
+import com.github.dbotvynovskyi.jacoco.jmx.entities.LinesRange;
+import com.github.dbotvynovskyi.jacoco.jmx.entities.TestSuitePerClassCoverageDetails;
+import com.github.dbotvynovskyi.jacoco.jmx.entities.YamlReportEntry;
+
+// TODO is not a threadsafe for now, just a POC
 public class TestSuiteCoverageProcessor {
 
 	private final TiaReportBuilderConfiguration configuration;
 	private final JaCoCoMBeanClient jaCoCoMBeanClient;
 	private Instant startTime;
 	private String currentTestSuiteName;
+	private final YamlReportEntry yamlReportEntry = new YamlReportEntry();
 
 	public TestSuiteCoverageProcessor(final TiaReportBuilderConfiguration configuration) {
 		this.configuration = configuration;
@@ -40,44 +45,60 @@ public class TestSuiteCoverageProcessor {
 	}
 
 	public void afterTestSuite(String testSuiteName) throws IOException {
-		Duration timeElapsed = Duration.between(startTime, Instant.now());
-		
+		Duration timeElapsed = Duration.between(startTime, Instant.now()); //TODO gather duration statistic
+
 		if (!currentTestSuiteName.equals(testSuiteName)) {
 			throw new IllegalStateException("Wrong test suite processing order, coverage data is corrupted");
 		}
 
 		byte[] executionData = jaCoCoMBeanClient.getExecutionData();
 		Collection<String> affectedClasses = getAffectedClasses(toExecutionDataStore(executionData));
-
-		Properties props = new Properties();
-		props.setProperty(testSuiteName, affectedClasses.stream().collect(Collectors.joining(",")));
-		props.setProperty("time.elapsed.milliseconds", "" + timeElapsed.toMillis());
-
-		File targetPath = new File(System.getProperty("user.dir"), "target");
-		File reportFolder = new File(targetPath, configuration.getReportsFolderName());
-		reportFolder.mkdir();
-
-		File reportFile = new File(reportFolder, testSuiteName);
-		reportFile.createNewFile();
-
-		props.store(new FileOutputStream(reportFile), null);
-
-		appendFinalReport(executionData);
+		dumpCoverageReport(testSuiteName, affectedClasses, timeElapsed);
 	}
 
-	private void appendFinalReport(byte[] executionData) throws IOException {
-		// TODO check if file exists or/not
-		File targetPath = new File(System.getProperty("user.dir"), "target");
-		File finalReport = new File(targetPath, configuration.getFinalReportName());
-		finalReport.createNewFile();
+	private void dumpCoverageReport(String testSuiteName, Collection<String> affectedClasses, Duration timeElapsed) throws IOException {
+		for (String affectedClass : affectedClasses) {
+			yamlReportEntry.getClassCoverageDetailsMap().computeIfAbsent(affectedClass, k -> new LinkedList<>());
+			List<TestSuitePerClassCoverageDetails> list = yamlReportEntry.getClassCoverageDetailsMap().get(affectedClass);
+			TestSuitePerClassCoverageDetails details = new TestSuitePerClassCoverageDetails();
+			details.setTestSuiteName(testSuiteName);
+			details.setTestSuiteDuration(timeElapsed.toMillis());
+			details.setRanges(Collections.singletonList(new LinesRange(-1, -1))); //TODO gather ranges
 
-		try (FileOutputStream output = new FileOutputStream(finalReport, true)) {
-			output.write(executionData);
+			list.add(details);
 		}
-		// TODO process exception correctly
+
+		File reportFile = ensureReportFileExists(
+				System.getProperty("user.dir"),
+				"target",
+				configuration.getReportsFolderName(),
+				configuration.getReportName()
+		);
+
+		System.out.println("Jacoco TIA report for test suite[" + testSuiteName + "] stored to: " + reportFile.toString());
+
+		Yaml.dump(yamlReportEntry, reportFile);
 	}
 
-	ExecutionDataStore toExecutionDataStore(byte[] executionData) throws IOException {
+	private File ensureReportFileExists(String rootPath, String... subPaths) throws IOException {
+		File file = new File(rootPath);
+
+		for (int i = 0; i < subPaths.length; i++) {
+			file = new File(file, subPaths[i]);
+
+			if (!file.exists()) {
+				if (i + 1 < subPaths.length) {
+					file.mkdir();
+				} else {
+					file.createNewFile();
+				}
+			}
+		}
+
+		return file;
+	}
+
+	private ExecutionDataStore toExecutionDataStore(byte[] executionData) throws IOException {
 		SessionInfoStore sessionInfoStore = new SessionInfoStore();
 		ExecutionDataStore executionDataStore = new ExecutionDataStore();
 

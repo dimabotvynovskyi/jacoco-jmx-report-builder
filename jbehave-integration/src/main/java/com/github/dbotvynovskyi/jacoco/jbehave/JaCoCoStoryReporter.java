@@ -1,6 +1,5 @@
 package com.github.dbotvynovskyi.jacoco.jbehave;
 
-import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 
@@ -32,16 +31,14 @@ public class JaCoCoStoryReporter implements StoryReporter {
 
 		this.scenarioTitle.set(clearScenarioTitle);
 		testSuiteCoverageProcessor.beforeTestSuite(clearScenarioTitle);
-		System.out.println(">>>> Jacoco JBehave reporter onBefore " + clearScenarioTitle);
 	}
 
 	public void afterScenario() {
-		System.out.println(">>>> Jacoco JBehave reporter onAfter");
 		try {
 			testSuiteCoverageProcessor.afterTestSuite(this.scenarioTitle.get());
 		}
-		catch (IOException e) {
-			System.out.println(">>>> Failed" + e.toString());
+		catch (Exception e) {
+			System.out.println("Failed to build report for test suite + " + this.scenarioTitle.get() + ", reason: " + e.toString());
 		}
 	}
 
@@ -54,11 +51,11 @@ public class JaCoCoStoryReporter implements StoryReporter {
 	}
 
 	public void beforeStory(Story story, boolean b) {
-		System.out.println(">>>> Jacoco JBehave onBeforeStory");
+		// TODO probably measure story duration
 	}
 
 	public void afterStory(boolean b) {
-		System.out.println(">>>> Jacoco JBehave onAfterStory");
+		// TODO
 	}
 
 	public void narrative(Narrative narrative) {

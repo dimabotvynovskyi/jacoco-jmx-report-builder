@@ -10,6 +10,7 @@ public class TiaReportBuilderConfiguration {
 	
 	private final String finalReportName = "final_jacoco_report.exec";
 	private final String reportsFolderName = "jacoco-tia-report";
+	private final String reportName = "jacoco-tia-report.yml";
 
 	public TiaReportBuilderConfiguration(String classesPath, String jacocoAgentJmxUrl) {
 		this.classesDirectory = classesPath;
@@ -30,5 +31,9 @@ public class TiaReportBuilderConfiguration {
 
 	public String getReportsFolderName() {
 		return reportsFolderName;
+	}
+
+	public String getReportName() {
+		return reportName;
 	}
 }
